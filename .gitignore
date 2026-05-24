@@ -6,7 +6,15 @@ pnpm-lock.yaml
 
 # Build output
 dist/
+dist-tests/
 *.tsbuildinfo
+*.d.ts
+*.d.ts.map
+*.js
+*.js.map
+
+# Keep src source files
+!src/**/*.ts
 
 # Test coverage
 coverage/
