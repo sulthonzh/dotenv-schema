@@ -10,6 +10,8 @@
     "build": "tsc",
     "build:test": "tsc --project tsconfig.test.json",
     "test": "npm run build:test && node --test dist-tests/**/*.test.js",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
