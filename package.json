@@ -1,5 +1,5 @@
 {
-  "name": "dotenv-schema",
+  "name": "@sulthonzh/dotenv-schema",
   "version": "1.0.0",
   "description": "Type-safe .env schema definition tool that generates validation code and .env.example files",
   "main": "dist/index.js",

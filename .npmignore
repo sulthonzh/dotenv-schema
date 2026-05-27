@@ -1,0 +1,19 @@
+# Source files
+src/
+tests/
+tsconfig*.json
+
+# Build artifacts (keep only dist)
+dist-tests/
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.log
+.env
+.env.example
+package-lock.json
+.github/
