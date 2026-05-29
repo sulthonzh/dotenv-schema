@@ -104,14 +104,14 @@ describe('EnvParser', () => {
 
   describe('inferSchema', () => {
     it('should create schema from .env file', () => {
-      const content = 'NODE_ENV=production\nPORT=3000\nDEBUG=true\n';
+      const content = 'MY_VAR=production\nPORT=3000\nDEBUG=true\n';
       const filePath = path.join(testDir, '.env');
       fs.writeFileSync(filePath, content);
 
       const schema = EnvParser.inferSchema(filePath);
-      assert.strictEqual(schema.NODE_ENV.type, 'string');
-      assert.strictEqual(schema.NODE_ENV.required, true);
-      assert.strictEqual(schema.NODE_ENV.default, 'production');
+      assert.strictEqual(schema.MY_VAR.type, 'string');
+      assert.strictEqual(schema.MY_VAR.required, true);
+      assert.strictEqual(schema.MY_VAR.default, 'production');
       assert.strictEqual(schema.PORT.type, 'number');
       assert.strictEqual(schema.DEBUG.type, 'boolean');
     });
