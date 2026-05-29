@@ -17,10 +17,15 @@ export class EnvParser {
     const lines = content.split('\n');
 
     for (const line of lines) {
-      const trimmed = line.trim();
+      let trimmed = line.trim();
       // Skip comments and empty lines
       if (!trimmed || trimmed.startsWith('#')) {
         continue;
+      }
+
+      // Handle "export KEY=VALUE" prefix (common in shell-style .env files)
+      if (trimmed.startsWith('export ')) {
+        trimmed = trimmed.substring(7).trim();
       }
 
       // Parse KEY=VALUE
@@ -28,6 +33,16 @@ export class EnvParser {
       if (eqIndex > 0) {
         const key = trimmed.substring(0, eqIndex).trim();
         let value = trimmed.substring(eqIndex + 1).trim();
+        
+        // Strip inline comments (only when value is unquoted)
+        // e.g. KEY=value # comment → value
+        // But KEY="value # not a comment" → value # not a comment
+        if (!value.startsWith('"') && !value.startsWith("'")) {
+          const commentIdx = value.indexOf(' #');
+          if (commentIdx > 0) {
+            value = value.substring(0, commentIdx).trimEnd();
+          }
+        }
         
         // Remove quotes if present
         if ((value.startsWith('"') && value.endsWith('"')) ||
@@ -99,6 +114,10 @@ export class EnvParser {
    * Save schema to JSON file
    */
   static saveSchema(schema: EnvSchema, filePath: string): void {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     const content = JSON.stringify(schema, null, 2);
     fs.writeFileSync(filePath, content, 'utf-8');
   }
