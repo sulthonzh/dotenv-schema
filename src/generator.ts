@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as path from 'path';
 import { EnvSchema, SchemaField } from './schema';
 
 export class Generator {
@@ -193,8 +194,8 @@ export class Generator {
    * Write generated content to file
    */
   static writeToFile(content: string, filePath: string): void {
-    const dir = filePath.substring(0, filePath.lastIndexOf('/'));
-    if (!fs.existsSync(dir)) {
+    const dir = path.dirname(filePath);
+    if (dir && !fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(filePath, content, 'utf-8');
