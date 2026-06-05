@@ -64,7 +64,13 @@ export class EnvParser {
     if (value.toLowerCase() === 'true' || value.toLowerCase() === 'false') {
       return 'boolean';
     }
-    if (!isNaN(Number(value)) && value.trim() !== '') {
+    // Number('') === 0 and Number('  ') === 0, so we must guard against
+    // empty / whitespace-only strings being misclassified as numbers.
+    const trimmed = value.trim();
+    if (trimmed === '') {
+      return 'string';
+    }
+    if (!isNaN(Number(value))) {
       return 'number';
     }
     try {

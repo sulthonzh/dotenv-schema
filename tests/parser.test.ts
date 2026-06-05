@@ -100,6 +100,12 @@ describe('EnvParser', () => {
       assert.strictEqual(EnvParser.inferType('hello'), 'string');
       assert.strictEqual(EnvParser.inferType('http://example.com'), 'string');
     });
+
+    it('should infer string type for empty and whitespace-only values', () => {
+      // Number('') === 0 and Number('  ') === 0, so these must NOT be 'number'
+      assert.strictEqual(EnvParser.inferType(''), 'string');
+      assert.strictEqual(EnvParser.inferType('  '), 'string');
+    });
   });
 
   describe('inferSchema', () => {
