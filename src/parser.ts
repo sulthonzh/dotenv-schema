@@ -16,8 +16,8 @@ export class EnvParser {
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
 
-    for (const line of lines) {
-      let trimmed = line.trim();
+    for (let i = 0; i < lines.length; i++) {
+      let trimmed = lines[i].trim();
       // Skip comments and empty lines
       if (!trimmed || trimmed.startsWith('#')) {
         continue;
@@ -34,6 +34,21 @@ export class EnvParser {
         const key = trimmed.substring(0, eqIndex).trim();
         let value = trimmed.substring(eqIndex + 1).trim();
         
+        // Handle multiline values (quoted strings with embedded newlines)
+        if ((value.startsWith('"') && !value.endsWith('"')) ||
+            (value.startsWith("'") && !value.endsWith("'"))) {
+          const quote = value[0];
+          const multilineLines = [value];
+          while (++i < lines.length) {
+            const nextLine = lines[i];
+            multilineLines.push(nextLine);
+            if (nextLine.trimEnd().endsWith(quote)) {
+              break;
+            }
+          }
+          value = multilineLines.join('\n');
+        }
+
         // Strip inline comments (only when value is unquoted)
         // e.g. KEY=value # comment → value
         // But KEY="value # not a comment" → value # not a comment
@@ -50,6 +65,9 @@ export class EnvParser {
           value = value.substring(1, value.length - 1);
         }
 
+        // Skip keys with empty names (e.g. lines starting with =)
+        if (key.length === 0) continue;
+
         envVars.set(key, value);
       }
     }
@@ -64,7 +82,8 @@ export class EnvParser {
     if (value.toLowerCase() === 'true' || value.toLowerCase() === 'false') {
       return 'boolean';
     }
-    if (!isNaN(Number(value)) && value.trim() !== '') {
+    // Only classify as number if it's a plain numeric value (not version strings like "1.0.0")
+    if (!isNaN(Number(value)) && value.trim() !== '' && /^[+-]?\d+(\.\d+)?$/.test(value.trim())) {
       return 'number';
     }
     try {

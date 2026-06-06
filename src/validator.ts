@@ -69,6 +69,10 @@ export class EnvValidator {
     }
   }
 
+  private static readonly MAX_PATTERN_LENGTH = 500;
+  private static readonly TRUTHY_VALUES = new Set(['true', '1', 'yes', 'on']);
+  private static readonly FALSY_VALUES = new Set(['false', '0', 'no', 'off']);
+
   private validateString(
     key: string,
     value: string,
@@ -76,8 +80,19 @@ export class EnvValidator {
     errors: string[],
     warnings: string[]
   ): void {
-    if (field.pattern && !new RegExp(field.pattern).test(value)) {
-      errors.push(`${key}: value does not match pattern ${field.pattern}`);
+    if (field.pattern) {
+      if (field.pattern.length > EnvValidator.MAX_PATTERN_LENGTH) {
+        errors.push(`${key}: pattern too long (max ${EnvValidator.MAX_PATTERN_LENGTH} chars)`);
+      } else {
+        try {
+          const regex = new RegExp(field.pattern);
+          if (!regex.test(value)) {
+            errors.push(`${key}: value does not match pattern ${field.pattern}`);
+          }
+        } catch {
+          errors.push(`${key}: invalid regex pattern ${field.pattern}`);
+        }
+      }
     }
     if (field.min && value.length < field.min) {
       errors.push(`${key}: value too short (minimum ${field.min} characters)`);
@@ -117,8 +132,8 @@ export class EnvValidator {
 
   private validateBoolean(key: string, value: string, field: SchemaField, errors: string[]): void {
     const lower = value.toLowerCase();
-    if (lower !== 'true' && lower !== 'false') {
-      errors.push(`${key}: value must be 'true' or 'false'`);
+    if (!EnvValidator.TRUTHY_VALUES.has(lower) && !EnvValidator.FALSY_VALUES.has(lower)) {
+      errors.push(`${key}: value must be one of: true, false, 1, 0, yes, no, on, off`);
     }
   }
 
