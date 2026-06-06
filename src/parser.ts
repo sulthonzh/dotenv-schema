@@ -16,10 +16,12 @@ export class EnvParser {
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
 
-    for (const line of lines) {
-      let trimmed = line.trim();
+    let i = 0;
+    while (i < lines.length) {
+      let trimmed = lines[i].trim();
       // Skip comments and empty lines
       if (!trimmed || trimmed.startsWith('#')) {
+        i++;
         continue;
       }
 
@@ -33,7 +35,7 @@ export class EnvParser {
       if (eqIndex > 0) {
         const key = trimmed.substring(0, eqIndex).trim();
         let value = trimmed.substring(eqIndex + 1).trim();
-        
+
         // Strip inline comments (only when value is unquoted)
         // e.g. KEY=value # comment → value
         // But KEY="value # not a comment" → value # not a comment
@@ -43,15 +45,51 @@ export class EnvParser {
             value = value.substring(0, commentIdx).trimEnd();
           }
         }
-        
-        // Remove quotes if present
-        if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
-          value = value.substring(1, value.length - 1);
+
+        // Handle multiline quoted values (e.g. RSA keys, multiline strings)
+        if (value.startsWith('"')) {
+          if (!value.endsWith('"') || value.length < 2) {
+            // Collect lines until closing quote
+            const parts = [value.substring(1)];
+            i++;
+            while (i < lines.length) {
+              const line = lines[i];
+              const closingIdx = line.indexOf('"');
+              if (closingIdx >= 0) {
+                parts.push(line.substring(0, closingIdx));
+                value = parts.join('\n');
+                break;
+              }
+              parts.push(line);
+              i++;
+            }
+          } else {
+            // Single-line quoted value — remove quotes
+            value = value.substring(1, value.length - 1);
+          }
+        } else if (value.startsWith("'")) {
+          if (!value.endsWith("'") || value.length < 2) {
+            const parts = [value.substring(1)];
+            i++;
+            while (i < lines.length) {
+              const line = lines[i];
+              const closingIdx = line.indexOf("'");
+              if (closingIdx >= 0) {
+                parts.push(line.substring(0, closingIdx));
+                value = parts.join('\n');
+                break;
+              }
+              parts.push(line);
+              i++;
+            }
+          } else {
+            value = value.substring(1, value.length - 1);
+          }
         }
 
         envVars.set(key, value);
       }
+      i++;
     }
 
     return envVars;
@@ -235,7 +273,7 @@ export class EnvParser {
       } else {
         // Check type match
         const actualType = this.inferType(envVars.get(key)!);
-        if (actualType !== field.type && !(field.type === 'string' && actualType === 'string')) {
+        if (actualType !== field.type) {
           typeMismatches.push({ key, expected: field.type, actual: actualType });
         }
       }

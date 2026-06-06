@@ -6,12 +6,15 @@ import * as path from 'path';
 import chalk from 'chalk';
 import { EnvParser, EnvValidator, Generator, SchemaWizard } from './index';
 
+// Read version from package.json so it stays in sync across releases
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'));
+
 const program = new Command();
 
 program
   .name('dotenv-schema')
   .description('Type-safe .env schema definition tool')
-  .version('1.1.0');
+  .version(pkg.version);
 
 program
   .command('init')
