@@ -67,11 +67,33 @@ export class Exporter {
       if (field.description) {
         lines.push(`${indent}${indent}# ${field.description}`);
       }
-      lines.push(`${indent}${indent}${key}: "${value.replace(/"/g, '\\"')}"`);
+      lines.push(`${indent}${indent}${key}: ${this.yamlQuote(value)}`);
     }
 
     lines.push('');
     return lines.join('\n');
+  }
+
+  /**
+   * Quote a value for safe YAML embedding.
+   * Uses block scalar (|-) for multiline, double-quoted with escaping otherwise.
+   */
+  private static yamlQuote(value: string): string {
+    if (value.includes('\n')) {
+      // Use literal block scalar for multiline values
+      const indented = value
+        .split('\n')
+        .map(line => `        ${line}`)
+        .join('\n');
+      return `|-\n        ${indented.trimStart()}`;
+    }
+    // Double-quote with YAML-required escaping
+    const escaped = value
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\n')
+      .replace(/\t/g, '\\t');
+    return `"${escaped}"`;
   }
 
   /**
@@ -90,7 +112,10 @@ export class Exporter {
       const tagStr = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
 
       if (field.default !== undefined) {
-        lines.push(`${key}=${field.default}${tagStr}${comment}`);
+        const safeDefault = String(field.default).includes('\n')
+          ? String(field.default).replace(/\n/g, '\\n')
+          : field.default;
+        lines.push(`${key}=${safeDefault}${tagStr}${comment}`);
       } else if (field.required) {
         lines.push(`${key}=<FILL ME>${tagStr}${comment}`);
       } else {
@@ -113,8 +138,18 @@ export class Exporter {
         lines.push(`# ${field.description}`);
       }
       if (field.default !== undefined) {
-        const escaped = String(field.default).replace(/'/g, "'\\''");
-        lines.push(`export ${key}='${escaped}'`);
+        const val = String(field.default);
+        if (val.includes('\n')) {
+          // Use $'...' ANSI-C quoting for multiline values
+          const escaped = val
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\n/g, '\\n');
+          lines.push(`export ${key}=$'${escaped}'`);
+        } else {
+          const escaped = val.replace(/'/g, "'\\''");
+          lines.push(`export ${key}='${escaped}'`);
+        }
       } else if (field.required) {
         lines.push(`export ${key}='<REQUIRED - set this value>'`);
       } else {

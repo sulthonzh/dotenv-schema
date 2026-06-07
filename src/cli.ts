@@ -327,8 +327,14 @@ program
         process.exit(1);
       }
 
+      const validFormats = ['docker-env', 'kubernetes', 'docker-compose', 'shell'];
+      if (!validFormats.includes(options.format)) {
+        console.error(chalk.red(`Invalid format "${options.format}". Valid formats: ${validFormats.join(', ')}`));
+        process.exit(1);
+      }
+
       const schema = EnvParser.loadSchema(options.schema);
-      const content = Exporter.export(schema, options.format as any);
+      const content = Exporter.export(schema, options.format);
 
       if (options.output) {
         Exporter.writeToFile(content, options.output);
