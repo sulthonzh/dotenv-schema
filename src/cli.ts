@@ -4,14 +4,14 @@ import { Command } from 'commander';
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import { EnvParser, EnvValidator, Generator, SchemaWizard } from './index';
+import { EnvParser, EnvValidator, Generator, SchemaWizard, Exporter } from './index';
 
 const program = new Command();
 
 program
   .name('dotenv-schema')
   .description('Type-safe .env schema definition tool')
-  .version('1.1.0');
+  .version('1.2.0');
 
 program
   .command('init')
@@ -309,6 +309,35 @@ program
       } else {
         console.error(chalk.red(`Error: ${error}`));
       }
+      process.exit(1);
+    }
+  });
+
+
+program
+  .command('export')
+  .description('Export schema to Docker, Kubernetes, or shell format')
+  .option('-s, --schema <path>', 'Path to schema file', 'schema.json')
+  .option('-f, --format <format>', 'Output format: docker-env, kubernetes, docker-compose, shell', 'docker-env')
+  .option('-o, --output <path>', 'Output file path (prints to stdout if not specified)')
+  .action((options) => {
+    try {
+      if (!fs.existsSync(options.schema)) {
+        console.error(chalk.red(`Schema file not found: ${options.schema}`));
+        process.exit(1);
+      }
+
+      const schema = EnvParser.loadSchema(options.schema);
+      const content = Exporter.export(schema, options.format as any);
+
+      if (options.output) {
+        Exporter.writeToFile(content, options.output);
+        console.log(chalk.green(`✓ Exported ${options.format} to ${options.output}`));
+      } else {
+        console.log(content);
+      }
+    } catch (error) {
+      console.error(chalk.red(`Error: ${error}`));
       process.exit(1);
     }
   });
