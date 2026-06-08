@@ -102,7 +102,7 @@ describe('EnvValidator', () => {
       const result = validator.validate(env);
 
       assert.strictEqual(result.valid, false);
-      assert.ok(result.errors.some(e => e.includes('must be \'true\' or \'false\'')));
+      assert.ok(result.errors.some(e => e.includes('must be one of: true, false, 1, 0, yes, no, on, off')));
     });
 
     it('should detect invalid enum value', () => {
