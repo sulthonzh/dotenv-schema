@@ -205,6 +205,55 @@ export class EnvParser {
   }
 
   /**
+   * Merge multiple .env files with conflict detection
+   * Files are applied in order: later files override earlier ones
+   * Returns merged vars and any conflicts found
+   */
+  static merge(
+    filePaths: string[],
+    options: { failOnConflict?: boolean } = {}
+  ): {
+    merged: Map<string, string>;
+    conflicts: { key: string; files: { file: string; value: string }[] }[];
+    sources: Record<string, string>;
+  } {
+    const merged = new Map<string, string>();
+    const sources: Record<string, string> = {};
+    const allValues: Record<string, { file: string; value: string }[]> = {};
+
+    for (const filePath of filePaths) {
+      if (!fs.existsSync(filePath)) {
+        continue;
+      }
+      const vars = this.parseEnvFile(filePath);
+      for (const [key, value] of vars.entries()) {
+        if (!allValues[key]) {
+          allValues[key] = [];
+        }
+        allValues[key].push({ file: path.basename(filePath), value });
+        merged.set(key, value);
+        sources[key] = path.basename(filePath);
+      }
+    }
+
+    // Detect conflicts: same key with different values across files
+    const conflicts: { key: string; files: { file: string; value: string }[] }[] = [];
+    for (const [key, entries] of Object.entries(allValues)) {
+      const uniqueValues = new Set(entries.map(e => e.value));
+      if (uniqueValues.size > 1) {
+        conflicts.push({ key, files: entries });
+      }
+    }
+
+    if (options.failOnConflict && conflicts.length > 0) {
+      const conflictKeys = conflicts.map(c => c.key).join(', ');
+      throw new Error(`Merge conflicts detected: ${conflictKeys}`);
+    }
+
+    return { merged, conflicts, sources };
+  }
+
+  /**
    * Compare .env file against schema and return a diff report
    */
   static diff(envPath: string, schemaPath: string): {
