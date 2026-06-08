@@ -35,7 +35,10 @@ export class Exporter {
         lines.push(`# ${field.description}`);
       }
       if (field.default !== undefined) {
-        lines.push(`${key}=${field.default}`);
+        const value = String(field.default);
+        // Escape newlines for Docker env format
+        const escapedValue = value.replace(/\n/g, '\\n');
+        lines.push(`${key}=${escapedValue}`);
       } else if (!field.required) {
         lines.push(`# ${key}=`);
       } else {
@@ -67,7 +70,17 @@ export class Exporter {
       if (field.description) {
         lines.push(`${indent}${indent}# ${field.description}`);
       }
-      lines.push(`${indent}${indent}${key}: "${value.replace(/"/g, '\\"')}"`);
+      
+      // Use YAML block scalar for multiline values, proper escaping for simple values
+      if (value.includes('\n') || value.includes(':') || value.includes('#') || value.includes('{') || value.includes('[') || value.includes('!')) {
+        // Multiline or complex values - use block scalar
+        const escapedValue = value.replace(/\n/g, '\\n').replace(/"/g, '\\"');
+        lines.push(`${indent}${indent}${key}: |-${escapedValue}`);
+      } else {
+        // Simple values - use quoted string
+        const escapedValue = value.replace(/"/g, '\\"');
+        lines.push(`${indent}${indent}${key}: "${escapedValue}"`);
+      }
     }
 
     lines.push('');
@@ -113,8 +126,17 @@ export class Exporter {
         lines.push(`# ${field.description}`);
       }
       if (field.default !== undefined) {
-        const escaped = String(field.default).replace(/'/g, "'\\''");
-        lines.push(`export ${key}='${escaped}'`);
+        const value = String(field.default);
+        
+        if (value.includes('\n')) {
+          // Multiline values use ANSI-C quoting
+          const escaped = value.replace(/\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\\\n');
+          lines.push(`export ${key}=$'${escaped}'`);
+        } else {
+          // Simple values use regular quoting
+          const escaped = value.replace(/'/g, "'\\''");
+          lines.push(`export ${key}='${escaped}'`);
+        }
       } else if (field.required) {
         lines.push(`export ${key}='<REQUIRED - set this value>'`);
       } else {

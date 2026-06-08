@@ -117,8 +117,10 @@ export class EnvValidator {
 
   private validateBoolean(key: string, value: string, field: SchemaField, errors: string[]): void {
     const lower = value.toLowerCase();
-    if (lower !== 'true' && lower !== 'false') {
-      errors.push(`${key}: value must be 'true' or 'false'`);
+    // Common boolean representations in .env files
+    const validBooleans = ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'];
+    if (!validBooleans.includes(lower) && !validBooleans.includes(value)) {
+      errors.push(`${key}: value must be one of: true, false, 1, 0, yes, no, on, off`);
     }
   }
 

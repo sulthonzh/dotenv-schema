@@ -61,7 +61,10 @@ export class EnvParser {
    * Infer type from value string
    */
   static inferType(value: string): SchemaType {
-    if (value.toLowerCase() === 'true' || value.toLowerCase() === 'false') {
+    const lower = value.toLowerCase();
+    // Common boolean representations in .env files
+    if (['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'].includes(lower) || 
+        ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'].includes(value)) {
       return 'boolean';
     }
     if (!isNaN(Number(value)) && value.trim() !== '') {

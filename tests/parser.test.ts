@@ -83,6 +83,16 @@ describe('EnvParser', () => {
       assert.strictEqual(EnvParser.inferType('false'), 'boolean');
       assert.strictEqual(EnvParser.inferType('TRUE'), 'boolean');
       assert.strictEqual(EnvParser.inferType('FALSE'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('1'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('0'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('yes'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('no'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('on'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('off'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('YES'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('NO'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('ON'), 'boolean');
+      assert.strictEqual(EnvParser.inferType('OFF'), 'boolean');
     });
 
     it('should infer number type', () => {

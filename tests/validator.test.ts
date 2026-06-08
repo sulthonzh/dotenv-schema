@@ -315,6 +315,52 @@ describe('EnvValidator', () => {
       assert.strictEqual(result.valid, true);
       assert.strictEqual(result.errors.length, 0);
     });
+
+    it('should accept various boolean representations', () => {
+      const env = {
+        REQUIRED_STRING: 'value',
+        REQUIRED_NUMBER: '42',
+        REQUIRED_BOOLEAN: 'yes',  // Should be accepted
+        REQUIRED_ENUM: 'a',
+        REQUIRED_JSON: '{}',
+        STRING_WITH_PATTERN: 'abc',
+        STRING_WITH_MIN: 'abc',
+        STRING_WITH_MAX: 'short',
+        NUMBER_WITH_MIN: '50',
+        NUMBER_WITH_MAX: '50',
+        URI_FORMAT: 'https://example.com',
+        EMAIL_FORMAT: 'test@example.com'
+      };
+
+      const validator = new EnvValidator(schema);
+      const result = validator.validate(env);
+
+      assert.strictEqual(result.valid, true);
+      assert.strictEqual(result.errors.length, 0);
+    });
+
+    it('should reject invalid boolean values', () => {
+      const env = {
+        REQUIRED_STRING: 'value',
+        REQUIRED_NUMBER: '42',
+        REQUIRED_BOOLEAN: 'maybe',  // Should be rejected
+        REQUIRED_ENUM: 'a',
+        REQUIRED_JSON: '{}',
+        STRING_WITH_PATTERN: 'abc',
+        STRING_WITH_MIN: 'abc',
+        STRING_WITH_MAX: 'short',
+        NUMBER_WITH_MIN: '50',
+        NUMBER_WITH_MAX: '50',
+        URI_FORMAT: 'https://example.com',
+        EMAIL_FORMAT: 'test@example.com'
+      };
+
+      const validator = new EnvValidator(schema);
+      const result = validator.validate(env);
+
+      assert.strictEqual(result.valid, false);
+      assert.ok(result.errors.some(e => e.includes('must be one of: true, false, 1, 0, yes, no, on, off')));
+    });
   });
 
   describe('getDefaults', () => {
