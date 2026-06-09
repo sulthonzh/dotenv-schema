@@ -129,8 +129,8 @@ export class Exporter {
         const value = String(field.default);
         
         if (value.includes('\n')) {
-          // Multiline values use ANSI-C quoting
-          const escaped = value.replace(/\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\\\n');
+          // Multiline values use ANSI-C quoting - simplified approach
+          const escaped = value.replace(/\\/g, '\\\\').replace(/'/g, "'\\''").replace(/"/g, '\\"').replace(/\n/g, '\\n');
           lines.push(`export ${key}=$'${escaped}'`);
         } else {
           // Simple values use regular quoting
