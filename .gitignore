@@ -1,43 +1,29 @@
-# Dependencies
+# dependencies
 node_modules/
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
 
-# Build output
+# build output
 dist/
-dist-tests/
 *.tsbuildinfo
-*.d.ts
-*.d.ts.map
-*.js
-*.js.map
 
-# Keep src source files
-!src/**/*.ts
-
-# Test coverage
+# test coverage
 coverage/
 .nyc_output/
 
-# IDE
+# env
+.env
+.env.local
+.env.*.local
+
+# ide
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# os
 .DS_Store
 Thumbs.db
 
-# Environment files
-.env
-.env.local
-.env.*.local
-
-# Generated files (keep these in git)
-# .env.example
-# src/env.types.ts
-# src/env.validator.ts
-# ENV_VARS.md
+# package
+*.tgz
