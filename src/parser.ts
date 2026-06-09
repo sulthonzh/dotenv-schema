@@ -67,7 +67,7 @@ export class EnvParser {
         ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'].includes(value)) {
       return 'boolean';
     }
-    if (!isNaN(Number(value)) && value.trim() !== '') {
+    if (!isNaN(Number(value)) && value.trim() !== '' && isFinite(Number(value))) {
       return 'number';
     }
     try {
