@@ -138,31 +138,51 @@ program
       }
 
       if (options.all || options.envExample) {
-        const content = Generator.generateEnvExample(schema);
-        const outputPath = path.join(options.outputDir, '.env.example');
-        Generator.writeToFile(content, outputPath);
-        console.log(chalk.green(`✓ Generated .env.example`));
+        try {
+          const content = Generator.generateEnvExample(schema);
+          const outputPath = path.join(options.outputDir, '.env.example');
+          Generator.writeToFile(content, outputPath);
+          console.log(chalk.green(`✓ Generated .env.example`));
+        } catch (error) {
+          console.error(chalk.red(`Failed to generate .env.example: ${error}`));
+          throw error;
+        }
       }
 
       if (options.all || options.types) {
-        const content = Generator.generateTypes(schema);
-        const outputPath = path.join(options.outputDir, 'src', 'env.types.ts');
-        Generator.writeToFile(content, outputPath);
-        console.log(chalk.green(`✓ Generated src/env.types.ts`));
+        try {
+          const content = Generator.generateTypes(schema);
+          const outputPath = path.join(options.outputDir, 'src', 'env.types.ts');
+          Generator.writeToFile(content, outputPath);
+          console.log(chalk.green(`✓ Generated src/env.types.ts`));
+        } catch (error) {
+          console.error(chalk.red(`Failed to generate TypeScript types: ${error}`));
+          throw error;
+        }
       }
 
       if (options.all || options.validator) {
-        const content = Generator.generateValidator(schema);
-        const outputPath = path.join(options.outputDir, 'src', 'env.validator.ts');
-        Generator.writeToFile(content, outputPath);
-        console.log(chalk.green(`✓ Generated src/env.validator.ts`));
+        try {
+          const content = Generator.generateValidator(schema);
+          const outputPath = path.join(options.outputDir, 'src', 'env.validator.ts');
+          Generator.writeToFile(content, outputPath);
+          console.log(chalk.green(`✓ Generated src/env.validator.ts`));
+        } catch (error) {
+          console.error(chalk.red(`Failed to generate validation code: ${error}`));
+          throw error;
+        }
       }
 
       if (options.all || options.docs) {
-        const content = Generator.generateDocs(schema);
-        const outputPath = path.join(options.outputDir, 'ENV_VARS.md');
-        Generator.writeToFile(content, outputPath);
-        console.log(chalk.green(`✓ Generated ENV_VARS.md`));
+        try {
+          const content = Generator.generateDocs(schema);
+          const outputPath = path.join(options.outputDir, 'ENV_VARS.md');
+          Generator.writeToFile(content, outputPath);
+          console.log(chalk.green(`✓ Generated ENV_VARS.md`));
+        } catch (error) {
+          console.error(chalk.red(`Failed to generate documentation: ${error}`));
+          throw error;
+        }
       }
 
       if (!options.all && !options.envExample && !options.types && !options.validator && !options.docs) {

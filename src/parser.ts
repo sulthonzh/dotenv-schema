@@ -9,6 +9,11 @@ export class EnvParser {
   static parseEnvFile(filePath: string): Map<string, string> {
     const envVars = new Map<string, string>();
     
+    // Security: Validate file path to prevent directory traversal
+    if (!this.isValidFilePath(filePath)) {
+      throw new Error(`Invalid file path: ${filePath}`);
+    }
+    
     if (!fs.existsSync(filePath)) {
       return envVars;
     }
@@ -141,6 +146,11 @@ export class EnvParser {
    * Load schema from JSON file
    */
   static loadSchema(filePath: string): EnvSchema {
+    // Security: Validate file path to prevent directory traversal
+    if (!this.isValidFilePath(filePath)) {
+      throw new Error(`Invalid schema file path: ${filePath}`);
+    }
+    
     if (!fs.existsSync(filePath)) {
       throw new Error(`Schema file not found: ${filePath}`);
     }
@@ -157,8 +167,13 @@ export class EnvParser {
    * Save schema to JSON file
    */
   static saveSchema(schema: EnvSchema, filePath: string): void {
+    // Security: Validate file path to prevent directory traversal
+    if (!this.isValidFilePath(filePath)) {
+      throw new Error(`Invalid output file path: ${filePath}`);
+    }
+    
     const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) {
+    if (dir && !fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     const content = JSON.stringify(schema, null, 2);
@@ -223,6 +238,13 @@ export class EnvParser {
     const merged = new Map<string, string>();
     const sources: Record<string, string> = {};
     const allValues: Record<string, { file: string; value: string }[]> = {};
+
+    // Security: Validate all file paths before processing
+    for (const filePath of filePaths) {
+      if (!this.isValidFilePath(filePath)) {
+        throw new Error(`Invalid file path in merge: ${filePath}`);
+      }
+    }
 
     for (const filePath of filePaths) {
       if (!fs.existsSync(filePath)) {
@@ -301,5 +323,29 @@ export class EnvParser {
     }
 
     return { missing, extra, typeMismatches, defaults };
+  }
+
+  /**
+   * Validate file path to prevent directory traversal attacks
+   */
+  private static isValidFilePath(filePath: string): boolean {
+    try {
+      // Normalize the path
+      const normalized = path.normalize(filePath);
+      
+      // Check for directory traversal attempts
+      if (normalized.includes('..') || normalized.includes('~')) {
+        return false;
+      }
+      
+      // Resolve to absolute path and compare
+      const resolved = path.resolve(normalized);
+      const cwd = process.cwd();
+      
+      // Ensure path is within current working directory or allowed locations
+      return resolved.startsWith(cwd) || resolved.startsWith('/tmp') || resolved.startsWith('/var');
+    } catch {
+      return false;
+    }
   }
 }
