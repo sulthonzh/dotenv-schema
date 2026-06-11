@@ -71,13 +71,20 @@ export class Exporter {
         lines.push(`${indent}${indent}# ${field.description}`);
       }
       
-      // Use YAML block scalar for multiline values, proper escaping for simple values
-      if (value.includes('\n') || value.includes(':') || value.includes('#') || value.includes('{') || value.includes('[') || value.includes('!')) {
-        // Multiline or complex values - use block scalar
-        const escapedValue = value.replace(/\n/g, '\\n').replace(/"/g, '\\"');
-        lines.push(`${indent}${indent}${key}: |-${escapedValue}`);
+      // Use YAML block scalar for multiline values, quoted string for simple values
+      if (value.includes('\n')) {
+        // Multiline values - use block literal scalar (content on next line)
+        const contentLines = value.split('\n');
+        lines.push(`${indent}${indent}${key}: |-`);
+        for (const contentLine of contentLines) {
+          lines.push(`${indent}${indent}${indent}${contentLine}`);
+        }
+      } else if (value.includes(':') || value.includes('#') || value.includes('{') || value.includes('[') || value.includes('!') || value.includes('"') || value.includes("'") || value.includes('&') || value.includes('*') || value.includes('?') || value.includes('|') || value.includes('>') || value.includes('%') || value.includes('@') || value.includes('`') || value.includes(',')) {
+        // Complex values - use double-quoted string with proper YAML escaping
+        const escapedValue = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+        lines.push(`${indent}${indent}${key}: "${escapedValue}"`);
       } else {
-        // Simple values - use quoted string
+        // Simple values - use quoted string for safety
         const escapedValue = value.replace(/"/g, '\\"');
         lines.push(`${indent}${indent}${key}: "${escapedValue}"`);
       }
@@ -103,7 +110,11 @@ export class Exporter {
       const tagStr = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
 
       if (field.default !== undefined) {
-        lines.push(`${key}=${field.default}${tagStr}${comment}`);
+        const rawValue = String(field.default);
+        // Quote values containing special characters
+        const needsQuote = rawValue.includes('#') || rawValue.includes(' ') || rawValue.includes('=') || rawValue.includes('\n') || rawValue.includes("'") || rawValue.includes('"');
+        const escapedValue = needsQuote ? `"${rawValue.replace(/"/g, '\\"')}"` : rawValue;
+        lines.push(`${key}=${escapedValue}${tagStr}${comment}`);
       } else if (field.required) {
         lines.push(`${key}=<FILL ME>${tagStr}${comment}`);
       } else {

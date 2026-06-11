@@ -86,8 +86,22 @@ export class EnvValidator {
     errors: string[],
     warnings: string[]
   ): void {
-    if (field.pattern && !new RegExp(field.pattern).test(value)) {
-      errors.push(`${key}: value does not match pattern ${field.pattern}`);
+    if (field.pattern) {
+      // Guard against ReDoS: limit pattern length and add timeout via input length cap
+      if (field.pattern.length > 500) {
+        errors.push(`${key}: pattern too complex (max 500 characters)`);
+      } else if (value.length > 10000) {
+        errors.push(`${key}: value too long to validate against pattern`);
+      } else {
+        try {
+          const regex = new RegExp(field.pattern);
+          if (!regex.test(value)) {
+            errors.push(`${key}: value does not match pattern ${field.pattern}`);
+          }
+        } catch (e) {
+          errors.push(`${key}: invalid regex pattern '${field.pattern}'`);
+        }
+      }
     }
     if (field.min && value.length < field.min) {
       errors.push(`${key}: value too short (minimum ${field.min} characters)`);
