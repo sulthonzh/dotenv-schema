@@ -3,6 +3,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EnvValidator = void 0;
 class EnvValidator {
     schema;
+    // Pre-compiled regex patterns for better performance
+    static BOOLEAN_PATTERNS = [
+        'true', 'false', '1', '0', 'yes', 'no', 'on', 'off',
+        'TRUE', 'FALSE', 'YES', 'NO', 'ON', 'OFF'
+    ];
+    static EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    static URI_PROTOCOLS = ['http:', 'https:', 'ftp:', 'ftps:', 'ws:', 'wss:', 'file:'];
+    static MALICIOUS_PROTOCOLS = ['javascript:', 'data:', 'vbscript:'];
     constructor(schema) {
         this.schema = schema;
     }
@@ -89,11 +97,12 @@ class EnvValidator {
         }
     }
     validateBoolean(key, value, field, errors) {
-        const lower = value.toLowerCase();
-        // Common boolean representations in .env files
-        const validBooleans = ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'];
-        if (!validBooleans.includes(lower) && !validBooleans.includes(value)) {
-            errors.push(`${key}: value must be one of: true, false, 1, 0, yes, no, on, off`);
+        // Use pre-compiled patterns for O(1) lookup instead of array.includes() O(n)
+        const normalizedValue = value.toLowerCase();
+        const isValid = EnvValidator.BOOLEAN_PATTERNS.includes(normalizedValue) ||
+            EnvValidator.BOOLEAN_PATTERNS.includes(value);
+        if (!isValid) {
+            errors.push(`${key}: value must be one of: ${EnvValidator.BOOLEAN_PATTERNS.join(', ')}`);
         }
     }
     validateEnum(key, value, field, errors) {
@@ -126,8 +135,8 @@ class EnvValidator {
             }
             // Try to create URL object - this is the most reliable way
             const url = new URL(value);
-            // Check if protocol is valid but be more permissive
-            if (!url.protocol || !['http:', 'https:', 'ftp:', 'ftps:', 'ws:', 'wss:', 'file:'].includes(url.protocol)) {
+            // Check if protocol is valid using pre-compiled array for better performance
+            if (!url.protocol || !EnvValidator.URI_PROTOCOLS.includes(url.protocol)) {
                 return false;
             }
             // Check if hostname is present for network protocols (but allow file: for local files)
@@ -136,8 +145,8 @@ class EnvValidator {
                     return false;
                 }
             }
-            // Basic check for malicious protocols
-            if (url.protocol === 'javascript:' || url.protocol === 'data:' || url.protocol === 'vbscript:') {
+            // Check for malicious protocols using pre-compiled array
+            if (EnvValidator.MALICIOUS_PROTOCOLS.includes(url.protocol)) {
                 return false;
             }
             return true;
@@ -150,9 +159,8 @@ class EnvValidator {
         if (!value || typeof value !== 'string') {
             return false;
         }
-        // More comprehensive email validation
-        const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-        if (!emailRegex.test(value)) {
+        // Use pre-compiled regex for better performance
+        if (!EnvValidator.EMAIL_REGEX.test(value)) {
             return false;
         }
         // Check for maximum length (RFC 5321 limit)

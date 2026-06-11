@@ -1,10 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { EnvSchema, SchemaField, SchemaType } from './schema';
+import { EnvSchema, SchemaField, SchemaType, EnvironmentSchema, SchemaConfig } from './schema';
 
 export class EnvParser {
   /**
    * Parse existing .env file and extract variables
+   * Enhanced with input validation and security checks
    */
   static parseEnvFile(filePath: string): Map<string, string> {
     const envVars = new Map<string, string>();
@@ -18,11 +19,19 @@ export class EnvParser {
       return envVars;
     }
 
+    // Check file size to prevent memory exhaustion
+    const stats = fs.statSync(filePath);
+    if (stats.size > 10 * 1024 * 1024) { // 10MB limit
+      throw new Error(`File size too large: ${filePath} exceeds 10MB limit`);
+    }
+
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       let trimmed = line.trim();
+      
       // Skip comments and empty lines
       if (!trimmed || trimmed.startsWith('#')) {
         continue;
@@ -37,6 +46,12 @@ export class EnvParser {
       const eqIndex = trimmed.indexOf('=');
       if (eqIndex > 0) {
         const key = trimmed.substring(0, eqIndex).trim();
+        
+        // Validate key name - must be valid environment variable name
+        if (!this.isValidKeyName(key)) {
+          throw new Error(`Invalid environment variable name on line ${i + 1}: ${key}`);
+        }
+        
         let value = trimmed.substring(eqIndex + 1).trim();
         
         // Strip inline comments (only when value is unquoted)
@@ -54,12 +69,55 @@ export class EnvParser {
             (value.startsWith("'") && value.endsWith("'"))) {
           value = value.substring(1, value.length - 1);
         }
+        
+        // Check for potential command injection in values
+        if (this.containsPotentiallyDangerousContent(value)) {
+          throw new Error(`Potentially dangerous content in environment variable ${key} on line ${i + 1}`);
+        }
+
+        // Limit value size to prevent memory issues
+        if (value.length > 1024 * 1024) { // 1MB limit per value
+          throw new Error(`Value too large for variable ${key}: exceeds 1MB limit`);
+        }
 
         envVars.set(key, value);
       }
     }
 
     return envVars;
+  }
+  
+  /**
+   * Validate environment variable key name
+   */
+  private static isValidKeyName(key: string): boolean {
+    if (typeof key !== 'string' || key.length === 0 || key.length > 100) {
+      return false;
+    }
+    
+    // Environment variable names must start with letter or underscore,
+    // followed by letters, numbers, or underscores
+    const validKeyRegex = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    return validKeyRegex.test(key);
+  }
+  
+  /**
+   * Check for potentially dangerous content in environment variable values
+   */
+  private static containsPotentiallyDangerousContent(value: string): boolean {
+    // Check for potentially dangerous shell characters
+    const dangerousPatterns = [
+      /\b(rm|mv|cp|chmod|chown|userdel|groupdel|deluser|delgroup)\s+/i,
+      /\b(exec|eval|system|shell_exec|popen)\(/i,
+      /\b(\$|\\`|\\$\()/,
+      /\b(sudo|su|passwd|mkpasswd)\b/i,
+      /<[^>]*>/g, // HTML-like tags
+      /javascript:/i,
+      /vbscript:/i,
+      /data:text\/html/i
+    ];
+    
+    return dangerousPatterns.some(pattern => pattern.test(value));
   }
 
   /**
@@ -181,19 +239,27 @@ export class EnvParser {
   }
 
   /**
-   * Validate schema structure
+   * Validate schema structure with comprehensive checks
    */
   static validateSchema(schema: any): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
+    // Check if schema is an object
     if (typeof schema !== 'object' || schema === null) {
       errors.push('Schema must be an object');
       return { valid: false, errors };
     }
 
     const validTypes: SchemaType[] = ['string', 'number', 'boolean', 'enum', 'json'];
+    const enumValuesMaxLength = 100; // Maximum allowed enum values
+    const descriptionMaxLength = 500; // Maximum description length
 
     for (const [key, field] of Object.entries(schema)) {
+      // Validate field name
+      if (!this.isValidKeyName(key)) {
+        errors.push(`${key}: invalid field name (must start with letter/underscore, contain only letters, numbers, underscores, max 100 chars)`);
+      }
+
       if (typeof field !== 'object' || field === null) {
         errors.push(`${key}: field must be an object`);
         continue;
@@ -201,25 +267,169 @@ export class EnvParser {
 
       const schemaField = field as SchemaField;
 
-      if (!schemaField.type) {
+      // Check for required properties
+      if (!schemaField.hasOwnProperty('type')) {
         errors.push(`${key}: missing required 'type' property`);
       } else if (!validTypes.includes(schemaField.type)) {
-        errors.push(`${key}: invalid type '${schemaField.type}'`);
+        errors.push(`${key}: invalid type '${schemaField.type}'. Must be one of: ${validTypes.join(', ')}`);
       }
 
-      if (schemaField.type === 'enum' && !schemaField.values) {
-        errors.push(`${key}: enum type requires 'values' array`);
-      }
-
+      // Validate required flag
       if (schemaField.required === undefined) {
-        errors.push(`${key}: missing 'required' property`);
+        errors.push(`${key}: missing 'required' property (must be true or false)`);
+      } else if (typeof schemaField.required !== 'boolean') {
+        errors.push(`${key}: 'required' must be a boolean value`);
       }
+
+      // Validate description if present
+      if (schemaField.description !== undefined) {
+        if (typeof schemaField.description !== 'string') {
+          errors.push(`${key}: description must be a string`);
+        } else if (schemaField.description.length > descriptionMaxLength) {
+          errors.push(`${key}: description exceeds maximum length of ${descriptionMaxLength} characters`);
+        }
+      }
+
+      // Validate default value if present
+      if (schemaField.default !== undefined) {
+        if (schemaField.default === null) {
+          errors.push(`${key}: default value cannot be null`);
+        } else {
+          try {
+            // Validate default value against field type
+            this.validateDefaultForType(key, schemaField.default, schemaField.type);
+          } catch (error) {
+            errors.push(`${key}: invalid default value - ${String(error)}`);
+          }
+        }
+      }
+
+      // Validate environment-specific overrides
+      if (schemaField.environments !== undefined) {
+        if (typeof schemaField.environments !== 'object' || schemaField.environments === null) {
+          errors.push(`${key}: environments must be an object`);
+        } else {
+          const validEnvironments = ['development', 'production', 'test', 'staging'];
+          for (const [env, override] of Object.entries(schemaField.environments)) {
+            if (!validEnvironments.includes(env)) {
+              errors.push(`${key}: invalid environment '${env}'. Must be one of: ${validEnvironments.join(', ')}`);
+            } else if (typeof override !== 'object' || override === null) {
+              errors.push(`${key}: environment override for '${env}' must be an object`);
+            }
+          }
+        }
+      }
+
+      // Validate type-specific properties
+      this.validateTypeSpecificFields(key, schemaField, errors);
     }
 
     return {
       valid: errors.length === 0,
       errors
     };
+  }
+  
+  /**
+   * Validate default value against field type
+   */
+  private static validateDefaultForType(key: string, defaultValue: any, type: SchemaType): void {
+    switch (type) {
+      case 'string':
+        if (typeof defaultValue !== 'string') {
+          throw new Error(`default value must be a string`);
+        }
+        break;
+      case 'number':
+        if (typeof defaultValue !== 'number' || isNaN(defaultValue)) {
+          throw new Error(`default value must be a valid number`);
+        }
+        break;
+      case 'boolean':
+        if (typeof defaultValue !== 'boolean') {
+          throw new Error(`default value must be a boolean`);
+        }
+        break;
+      case 'enum':
+        if (typeof defaultValue !== 'string') {
+          throw new Error(`default value must be a string for enum type`);
+        }
+        break;
+      case 'json':
+        if (typeof defaultValue !== 'string') {
+          try {
+            // Try to parse as JSON to validate
+            JSON.parse(String(defaultValue));
+          } catch {
+            throw new Error(`default value must be valid JSON`);
+          }
+        }
+        break;
+    }
+  }
+  
+  /**
+   * Validate type-specific field properties
+   */
+  private static validateTypeSpecificFields(key: string, field: SchemaField, errors: string[]): void {
+    switch (field.type) {
+      case 'string':
+        if (field.pattern !== undefined) {
+          try {
+            new RegExp(field.pattern);
+          } catch {
+            errors.push(`${key}: invalid regular expression pattern`);
+          }
+        }
+        if (field.min !== undefined && (typeof field.min !== 'number' || field.min < 0)) {
+          errors.push(`${key}: min must be a positive number`);
+        }
+        if (field.max !== undefined && (typeof field.max !== 'number' || field.max < 0)) {
+          errors.push(`${key}: max must be a positive number`);
+        }
+        if (field.min !== undefined && field.max !== undefined && field.min > field.max) {
+          errors.push(`${key}: min value cannot be greater than max value`);
+        }
+        break;
+      
+      case 'number':
+        if (field.min !== undefined && (typeof field.min !== 'number' || isNaN(field.min))) {
+          errors.push(`${key}: min must be a valid number`);
+        }
+        if (field.max !== undefined && (typeof field.max !== 'number' || isNaN(field.max))) {
+          errors.push(`${key}: max must be a valid number`);
+        }
+        if (field.min !== undefined && field.max !== undefined && field.min > field.max) {
+          errors.push(`${key}: min value cannot be greater than max value`);
+        }
+        break;
+      
+      case 'enum':
+        if (!Array.isArray(field.values) || field.values.length === 0) {
+          errors.push(`${key}: enum type requires non-empty 'values' array`);
+        } else {
+          if (field.values.length > 100) {
+            errors.push(`${key}: enum values array exceeds maximum length of 100`);
+          }
+          
+          // Check for duplicate values
+          const uniqueValues = new Set(field.values);
+          if (uniqueValues.size !== field.values.length) {
+            errors.push(`${key}: enum values must be unique`);
+          }
+          
+          // Validate each value
+          for (let i = 0; i < field.values.length; i++) {
+            const value = field.values[i];
+            if (typeof value !== 'string') {
+              errors.push(`${key}: enum value at index ${i} must be a string`);
+            } else if (value.length === 0 || value.length > 100) {
+              errors.push(`${key}: enum value at index ${i} must be 1-100 characters long`);
+            }
+          }
+        }
+        break;
+    }
   }
 
   /**
@@ -229,15 +439,22 @@ export class EnvParser {
    */
   static merge(
     filePaths: string[],
-    options: { failOnConflict?: boolean } = {}
+    options: { failOnConflict?: boolean; verbose?: boolean } = {}
   ): {
     merged: Map<string, string>;
     conflicts: { key: string; files: { file: string; value: string }[] }[];
     sources: Record<string, string>;
+    summary: {
+      totalFiles: number;
+      totalVariables: number;
+      conflictsCount: number;
+      overriddenKeys: string[];
+    };
   } {
     const merged = new Map<string, string>();
     const sources: Record<string, string> = {};
     const allValues: Record<string, { file: string; value: string }[]> = {};
+    const overriddenKeys = new Set<string>();
 
     // Security: Validate all file paths before processing
     for (const filePath of filePaths) {
@@ -246,18 +463,47 @@ export class EnvParser {
       }
     }
 
+    // Check if files exist
+    const existingFiles = filePaths.filter(fs.existsSync);
+    if (existingFiles.length === 0) {
+      throw new Error('No valid .env files found to merge');
+    }
+    
+    if (options.verbose) {
+      console.log(`Found ${existingFiles.length} valid files out of ${filePaths.length} specified`);
+    }
+
     for (const filePath of filePaths) {
       if (!fs.existsSync(filePath)) {
+        if (options.verbose) {
+          console.warn(`Skipping non-existent file: ${filePath}`);
+        }
         continue;
       }
-      const vars = this.parseEnvFile(filePath);
-      for (const [key, value] of vars.entries()) {
-        if (!allValues[key]) {
-          allValues[key] = [];
+      
+      try {
+        const vars = this.parseEnvFile(filePath);
+        const fileName = path.basename(filePath);
+        
+        for (const [key, value] of vars.entries()) {
+          // Check if this key already exists (override detection)
+          if (merged.has(key)) {
+            overriddenKeys.add(key);
+          }
+          
+          if (!allValues[key]) {
+            allValues[key] = [];
+          }
+          allValues[key].push({ file: fileName, value });
+          merged.set(key, value);
+          sources[key] = fileName;
         }
-        allValues[key].push({ file: path.basename(filePath), value });
-        merged.set(key, value);
-        sources[key] = path.basename(filePath);
+        
+        if (options.verbose) {
+          console.log(`Processed ${vars.size} variables from ${fileName}`);
+        }
+      } catch (error) {
+        throw new Error(`Failed to parse ${filePath}: ${String(error)}`);
       }
     }
 
@@ -271,11 +517,25 @@ export class EnvParser {
     }
 
     if (options.failOnConflict && conflicts.length > 0) {
-      const conflictKeys = conflicts.map(c => c.key).join(', ');
-      throw new Error(`Merge conflicts detected: ${conflictKeys}`);
+      const conflictDetails = conflicts.map(c => {
+        const values = c.files.map(f => `${f.file}: ${f.value}`).join(', ');
+        return `${c.key} (${values})`;
+      }).join('; ');
+      
+      throw new Error(`Merge conflicts detected:\n  ${conflictDetails}`);
     }
 
-    return { merged, conflicts, sources };
+    return { 
+      merged, 
+      conflicts, 
+      sources,
+      summary: {
+        totalFiles: existingFiles.length,
+        totalVariables: merged.size,
+        conflictsCount: conflicts.length,
+        overriddenKeys: Array.from(overriddenKeys)
+      }
+    };
   }
 
   /**
@@ -326,15 +586,90 @@ export class EnvParser {
   }
 
   /**
+   * Resolve environment-specific schema with fallback support
+   */
+  static resolveEnvironmentSchema(
+    schema: EnvSchema | EnvironmentSchema,
+    config: SchemaConfig = {}
+  ): EnvSchema {
+    const { environment = process.env.NODE_ENV || 'development', fallback, strictMode = false } = config;
+    const validEnvironments = ['development', 'production', 'test', 'staging'];
+    
+    // Handle legacy format (single schema)
+    if (!schema.hasOwnProperty(environment)) {
+      return schema as EnvSchema;
+    }
+    
+    const environmentSchema = schema as EnvironmentSchema;
+    const resolvedSchema: EnvSchema = {};
+    
+    // Apply base schema
+    const baseSchema = environmentSchema[environment] || {};
+    
+    // Apply environment-specific overrides
+    for (const [key, field] of Object.entries(baseSchema)) {
+      const resolvedField: SchemaField = { ...field };
+      
+      // Apply environment-specific overrides if they exist
+      if (field.environments && field.environments[environment]) {
+        const override = field.environments[environment];
+        Object.assign(resolvedField, override);
+        
+        // Handle environment-specific defaults
+        if (override.default !== undefined) {
+          resolvedField.default = override.default;
+        }
+        
+        // Handle environment-specific required flag
+        if (override.required !== undefined) {
+          resolvedField.required = override.required;
+        }
+      }
+      
+      resolvedSchema[key] = resolvedField;
+    }
+    
+    // Apply fallback if specified
+    if (fallback && validEnvironments.includes(fallback)) {
+      const fallbackSchema = environmentSchema[fallback];
+      if (fallbackSchema) {
+        for (const [key, field] of Object.entries(fallbackSchema)) {
+          if (!resolvedSchema[key] && !strictMode) {
+            // In non-strict mode, include fallback variables that don't exist in current environment
+            resolvedSchema[key] = field as SchemaField;
+          }
+        }
+      }
+    }
+    
+    return resolvedSchema;
+  }
+
+  /**
    * Validate file path to prevent directory traversal attacks
+   * Enhanced with additional security checks
    */
   private static isValidFilePath(filePath: string): boolean {
     try {
+      // Basic validation - must be a string
+      if (typeof filePath !== 'string' || !filePath.trim()) {
+        return false;
+      }
+      
       // Normalize the path
       const normalized = path.normalize(filePath);
       
       // Check for directory traversal attempts
-      if (normalized.includes('..') || normalized.includes('~')) {
+      if (normalized.includes('..') || normalized.includes('~') || 
+          normalized.includes('\\') || normalized.includes('/./') || 
+          normalized.includes('//')) {
+        return false;
+      }
+      
+      // Check for potentially dangerous file extensions
+      const dangerousExtensions = ['.sh', '.bat', '.cmd', '.ps1', '.exe', '.scr', '.com'];
+      const ext = path.extname(normalized).toLowerCase();
+      if (dangerousExtensions.includes(ext)) {
         return false;
       }
       
@@ -343,7 +678,27 @@ export class EnvParser {
       const cwd = process.cwd();
       
       // Ensure path is within current working directory or allowed locations
-      return resolved.startsWith(cwd) || resolved.startsWith('/tmp') || resolved.startsWith('/var');
+      const isAllowed = resolved.startsWith(cwd) || 
+                       resolved.startsWith('/tmp') || 
+                       resolved.startsWith('/var') ||
+                       resolved.startsWith('/etc');
+      
+      if (!isAllowed) {
+        return false;
+      }
+      
+      // Additional security check: ensure path doesn't contain symlinks
+      try {
+        const stats = fs.statSync(resolved, { throwIfNoEntry: false });
+        if (stats && stats.isSymbolicLink()) {
+          return false;
+        }
+      } catch {
+        // If we can't access the file, be conservative and reject
+        return false;
+      }
+      
+      return true;
     } catch {
       return false;
     }

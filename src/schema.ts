@@ -10,13 +10,27 @@ export interface SchemaField {
   min?: number;
   max?: number;
   pattern?: string;
+  // Environment-specific overrides
+  environments?: {
+    [key: string]: Partial<SchemaField>;
+  };
 }
 
 export interface EnvSchema {
   [key: string]: SchemaField;
 }
 
+export interface EnvironmentSchema {
+  [environment: string]: EnvSchema;
+}
+
 export interface ParseResult {
   schema: EnvSchema;
   errors: string[];
+}
+
+export interface SchemaConfig {
+  environment?: string;
+  fallback?: string;
+  strictMode?: boolean;
 }

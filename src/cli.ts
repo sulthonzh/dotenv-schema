@@ -59,14 +59,28 @@ program
   .option('-j, --json', 'Output as JSON')
   .action((options) => {
     try {
+      // Validate schema file existence and accessibility
       if (!fs.existsSync(options.schema)) {
         const msg = `Schema file not found: ${options.schema}`;
         if (options.json) {
           console.log(JSON.stringify({ ok: false, error: msg }));
         } else {
           console.error(chalk.red(msg));
+          console.error(chalk.yellow('💡 Tip: Run "dotenv-schema init" to create a schema from your .env file'));
         }
         process.exit(1);
+      }
+
+      // Check if .env file exists (optional validation)
+      if (!fs.existsSync(options.env)) {
+        const msg = `Environment file not found: ${options.env}`;
+        if (options.json) {
+          console.log(JSON.stringify({ ok: false, error: msg }));
+        } else {
+          console.error(chalk.yellow(`⚠ ${msg}`));
+          console.error(chalk.yellow('💡 This may be expected if you\'re checking for missing required variables'));
+        }
+        // Continue with empty env file to detect missing required variables
       }
 
       const schema = EnvParser.loadSchema(options.schema);
@@ -80,7 +94,12 @@ program
         console.log(JSON.stringify({
           ok: result.valid,
           errors: result.errors,
-          warnings: result.warnings
+          warnings: result.warnings,
+          stats: {
+            totalVariables: Object.keys(schema).length,
+            missingRequired: result.errors.filter(e => e.includes('Missing required')).length,
+            unknownVariables: result.warnings.filter(w => w.includes('Unknown')).length
+          }
         }, null, 2));
       } else if (result.valid) {
         console.log(chalk.green('✓ Environment variables are valid'));
@@ -106,10 +125,34 @@ program
         console.log(JSON.stringify({ ok: false, error: String(error) }));
       } else {
         console.error(chalk.red(`Error: ${error}`));
+        console.error(chalk.yellow('💡 Check file paths and permissions, or run dotenv-schema check to validate schema syntax'));
       }
       process.exit(1);
     }
   });
+  
+  /**
+   * Print helpful validation suggestions
+   */
+  private static printValidationHelp(result: any, schema: any): void {
+    const missingRequired = result.errors.filter(e => e.includes('Missing required'));
+    const unknownVariables = result.warnings.filter(w => w.includes('Unknown'));
+    
+    if (missingRequired.length > 0) {
+      console.log(chalk.blue('\n💡 Suggestions:'));
+      console.log(chalk.blue('  • Add the missing required variables to your .env file'));
+      console.log(chalk.blue('  • Or mark them as optional in your schema.json by setting "required": false'));
+    }
+    
+    if (unknownVariables.length > 0) {
+      console.log(chalk.blue('  • Consider adding unknown variables to your schema for better validation'));
+      console.log(chalk.blue('  • Use "dotenv-schema add" to add them interactively')));
+    }
+    
+    if (result.errors.some(e => e.includes('invalid URI format') || e.includes('invalid email format'))) {
+      console.log(chalk.blue('  • Check your URI and email format validation rules'));
+    }
+  }
 
 program
   .command('generate')
