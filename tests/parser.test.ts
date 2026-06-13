@@ -83,8 +83,9 @@ describe('EnvParser', () => {
       assert.strictEqual(EnvParser.inferType('false'), 'boolean');
       assert.strictEqual(EnvParser.inferType('TRUE'), 'boolean');
       assert.strictEqual(EnvParser.inferType('FALSE'), 'boolean');
-      assert.strictEqual(EnvParser.inferType('1'), 'boolean');
-      assert.strictEqual(EnvParser.inferType('0'), 'boolean');
+      // Note: '1' and '0' are number, not boolean — e.g., PORT=0, RETRIES=1
+      assert.strictEqual(EnvParser.inferType('1'), 'number');
+      assert.strictEqual(EnvParser.inferType('0'), 'number');
       assert.strictEqual(EnvParser.inferType('yes'), 'boolean');
       assert.strictEqual(EnvParser.inferType('no'), 'boolean');
       assert.strictEqual(EnvParser.inferType('on'), 'boolean');

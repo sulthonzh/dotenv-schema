@@ -105,13 +105,13 @@ export class EnvParser {
    * Check for potentially dangerous content in environment variable values
    */
   private static containsPotentiallyDangerousContent(value: string): boolean {
-    // Check for potentially dangerous shell characters
+    // Check for potentially dangerous shell command patterns
     const dangerousPatterns = [
-      /\b(rm|mv|cp|chmod|chown|userdel|groupdel|deluser|delgroup)\s+/i,
+      /\b(rm|mv|cp|chmod|chown|userdel|groupdel|deluser|delgroup)\s+\S/i,
       /\b(exec|eval|system|shell_exec|popen)\(/i,
-      /\b(\$|\\`|\\$\()/,
-      /\b(sudo|su|passwd|mkpasswd)\b/i,
-      /<[^>]*>/g, // HTML-like tags
+      /\$\(.*\)/, // Command substitution: $(cmd)
+      /`[^`]*`/,   // Backtick command substitution
+      /\b(sudo|su|passwd|mkpasswd)\s+\S/i,
       /javascript:/i,
       /vbscript:/i,
       /data:text\/html/i
@@ -126,8 +126,10 @@ export class EnvParser {
   static inferType(value: string): SchemaType {
     const lower = value.toLowerCase();
     // Common boolean representations in .env files
-    if (['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'].includes(lower) || 
-        ['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'].includes(value)) {
+    // Note: '1' and '0' are intentionally excluded from boolean inference
+    // because they are numbers first (e.g., PORT=0, MAX_RETRIES=1)
+    if (['true', 'false', 'yes', 'no', 'on', 'off'].includes(lower) || 
+        ['true', 'false', 'yes', 'no', 'on', 'off'].includes(value)) {
       return 'boolean';
     }
     if (!isNaN(Number(value)) && value.trim() !== '' && isFinite(Number(value))) {
@@ -356,13 +358,15 @@ export class EnvParser {
         }
         break;
       case 'json':
-        if (typeof defaultValue !== 'string') {
+        if (typeof defaultValue === 'string') {
+          // String defaults must be parseable as JSON
           try {
-            // Try to parse as JSON to validate
-            JSON.parse(String(defaultValue));
+            JSON.parse(defaultValue);
           } catch {
             throw new Error(`default value must be valid JSON`);
           }
+        } else if (typeof defaultValue !== 'object' || defaultValue === null) {
+          throw new Error(`default value must be a JSON string or object`);
         }
         break;
     }
