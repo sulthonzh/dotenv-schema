@@ -130,29 +130,6 @@ program
       process.exit(1);
     }
   });
-  
-  /**
-   * Print helpful validation suggestions
-   */
-  private static printValidationHelp(result: any, schema: any): void {
-    const missingRequired = result.errors.filter(e => e.includes('Missing required'));
-    const unknownVariables = result.warnings.filter(w => w.includes('Unknown'));
-    
-    if (missingRequired.length > 0) {
-      console.log(chalk.blue('\n💡 Suggestions:'));
-      console.log(chalk.blue('  • Add the missing required variables to your .env file'));
-      console.log(chalk.blue('  • Or mark them as optional in your schema.json by setting "required": false'));
-    }
-    
-    if (unknownVariables.length > 0) {
-      console.log(chalk.blue('  • Consider adding unknown variables to your schema for better validation'));
-      console.log(chalk.blue('  • Use "dotenv-schema add" to add them interactively')));
-    }
-    
-    if (result.errors.some(e => e.includes('invalid URI format') || e.includes('invalid email format'))) {
-      console.log(chalk.blue('  • Check your URI and email format validation rules'));
-    }
-  }
 
 program
   .command('generate')
