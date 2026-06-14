@@ -13,21 +13,17 @@ export class Generator {
     lines.push('');
 
     for (const [key, field] of Object.entries(schema)) {
-      // Add description as comment
       if (field.description) {
         lines.push(`# ${field.description}`);
       }
 
-      // Add required marker
       const required = field.required ? ' (required)' : ` (optional, default: ${field.default ?? ''})`;
       lines.push(`# ${required}`);
 
-      // Add type hint
       if (field.type === 'enum' && field.values) {
         lines.push(`# Options: ${field.values.join(', ')}`);
       }
 
-      // Generate value
       let value = '';
       if (field.default !== undefined) {
         value = String(field.default);
@@ -70,7 +66,6 @@ export class Generator {
     lines.push('}');
     lines.push('');
 
-    // Generate type guard function
     lines.push('export function isEnvSchema(obj: any): obj is EnvSchema {');
     lines.push('  if (typeof obj !== "object" || obj === null) {');
     lines.push('    return false;');
