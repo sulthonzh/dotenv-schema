@@ -2,8 +2,7 @@ import { EnvSchema, SchemaField, SchemaType } from './schema';
 
 export class EnvValidator {
   private schema: EnvSchema;
-  
-  // Pre-compiled regex patterns for better performance
+
   private static readonly BOOLEAN_PATTERNS = [
     'true', 'false', '1', '0', 'yes', 'no', 'on', 'off',
     'TRUE', 'FALSE', 'YES', 'NO', 'ON', 'OFF'
@@ -24,7 +23,6 @@ export class EnvValidator {
     const errors: string[] = [];
     const warnings: string[] = [];
 
-    // Check required fields
     for (const [key, field] of Object.entries(this.schema)) {
       if (field.required && !(key in env)) {
         errors.push(`Missing required environment variable: ${key}`);
@@ -36,7 +34,6 @@ export class EnvValidator {
       }
     }
 
-    // Check for unknown env vars
     for (const key of Object.keys(env)) {
       if (!(key in this.schema)) {
         warnings.push(`Unknown environment variable: ${key}`);
@@ -140,11 +137,10 @@ export class EnvValidator {
   }
 
   private validateBoolean(key: string, value: string, field: SchemaField, errors: string[]): void {
-    // Use pre-compiled patterns for O(1) lookup instead of array.includes() O(n)
     const normalizedValue = value.toLowerCase();
-    const isValid = EnvValidator.BOOLEAN_PATTERNS.includes(normalizedValue) || 
+    const isValid = EnvValidator.BOOLEAN_PATTERNS.includes(normalizedValue) ||
                    EnvValidator.BOOLEAN_PATTERNS.includes(value);
-    
+
     if (!isValid) {
       errors.push(`${key}: value must be one of: ${EnvValidator.BOOLEAN_PATTERNS.join(', ')}`);
     }
@@ -168,7 +164,6 @@ export class EnvValidator {
     }
     
     try {
-      // Try to parse JSON
       JSON.parse(value);
     } catch (error) {
       errors.push(`${key}: value is not valid JSON`);
@@ -177,31 +172,27 @@ export class EnvValidator {
 
   private isValidUri(value: string): boolean {
     try {
-      // Basic URL format check
       if (!value || typeof value !== 'string') {
         return false;
       }
-      
-      // Try to create URL object - this is the most reliable way
+
       const url = new URL(value);
-      
-      // Check if protocol is valid using pre-compiled array for better performance
+
       if (!url.protocol || !EnvValidator.URI_PROTOCOLS.includes(url.protocol)) {
         return false;
       }
-      
-      // Check if hostname is present for network protocols (but allow file: for local files)
+
       if (['http:', 'https:', 'ftp:', 'ftps:', 'ws:', 'wss:'].includes(url.protocol)) {
+        // Allow file: scheme (no hostname) but require hostname for network protocols
         if (!url.hostname || url.hostname.length === 0) {
           return false;
         }
       }
-      
-      // Check for malicious protocols using pre-compiled array
+
       if (EnvValidator.MALICIOUS_PROTOCOLS.includes(url.protocol)) {
         return false;
       }
-      
+
       return true;
     } catch {
       return false;
@@ -212,23 +203,22 @@ export class EnvValidator {
     if (!value || typeof value !== 'string') {
       return false;
     }
-    
-    // Use pre-compiled regex for better performance
+
     if (!EnvValidator.EMAIL_REGEX.test(value)) {
       return false;
     }
-    
-    // Check for maximum length (RFC 5321 limit)
+
+    // RFC 5321 limit
     if (value.length > 254) {
       return false;
     }
-    
-    // Check local part length (max 64 chars)
+
     const [localPart] = value.split('@');
+    // RFC 5321 local part max length
     if (localPart.length > 64) {
       return false;
     }
-    
+
     return true;
   }
 

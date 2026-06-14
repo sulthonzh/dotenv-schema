@@ -31,8 +31,7 @@ export class EnvParser {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       let trimmed = line.trim();
-      
-      // Skip comments and empty lines
+
       if (!trimmed || trimmed.startsWith('#')) {
         continue;
       }
@@ -42,12 +41,10 @@ export class EnvParser {
         trimmed = trimmed.substring(7).trim();
       }
 
-      // Parse KEY=VALUE
       const eqIndex = trimmed.indexOf('=');
       if (eqIndex > 0) {
         const key = trimmed.substring(0, eqIndex).trim();
         
-        // Validate key name - must be valid environment variable name
         if (!this.isValidKeyName(key)) {
           throw new Error(`Invalid environment variable name on line ${i + 1}: ${key}`);
         }
@@ -64,7 +61,6 @@ export class EnvParser {
           }
         }
         
-        // Remove quotes if present
         if ((value.startsWith('"') && value.endsWith('"')) ||
             (value.startsWith("'") && value.endsWith("'"))) {
           value = value.substring(1, value.length - 1);
@@ -105,7 +101,6 @@ export class EnvParser {
    * Check for potentially dangerous content in environment variable values
    */
   private static containsPotentiallyDangerousContent(value: string): boolean {
-    // Check for potentially dangerous shell command patterns
     const dangerousPatterns = [
       /\b(rm|mv|cp|chmod|chown|userdel|groupdel|deluser|delgroup)\s+\S/i,
       /\b(exec|eval|system|shell_exec|popen)\(/i,
@@ -149,11 +144,9 @@ export class EnvParser {
    */
   static inferFormat(key: string, value: string): string | undefined {
     const upperKey = key.toUpperCase();
-    // URL/URI detection
     if (/^https?:\/\//.test(value) || upperKey.includes('URL') || upperKey.endsWith('_URI')) {
       return 'uri';
     }
-    // Email detection
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) || upperKey.includes('EMAIL') || upperKey.includes('MAIL')) {
       return 'email';
     }
@@ -246,7 +239,6 @@ export class EnvParser {
   static validateSchema(schema: any): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    // Check if schema is an object
     if (typeof schema !== 'object' || schema === null) {
       errors.push('Schema must be an object');
       return { valid: false, errors };
@@ -257,7 +249,6 @@ export class EnvParser {
     const descriptionMaxLength = 500; // Maximum description length
 
     for (const [key, field] of Object.entries(schema)) {
-      // Validate field name
       if (!this.isValidKeyName(key)) {
         errors.push(`${key}: invalid field name (must start with letter/underscore, contain only letters, numbers, underscores, max 100 chars)`);
       }
@@ -269,21 +260,18 @@ export class EnvParser {
 
       const schemaField = field as SchemaField;
 
-      // Check for required properties
       if (!schemaField.hasOwnProperty('type')) {
         errors.push(`${key}: missing required 'type' property`);
       } else if (!validTypes.includes(schemaField.type)) {
         errors.push(`${key}: invalid type '${schemaField.type}'. Must be one of: ${validTypes.join(', ')}`);
       }
 
-      // Validate required flag
       if (schemaField.required === undefined) {
         errors.push(`${key}: missing 'required' property (must be true or false)`);
       } else if (typeof schemaField.required !== 'boolean') {
         errors.push(`${key}: 'required' must be a boolean value`);
       }
 
-      // Validate description if present
       if (schemaField.description !== undefined) {
         if (typeof schemaField.description !== 'string') {
           errors.push(`${key}: description must be a string`);
@@ -292,13 +280,11 @@ export class EnvParser {
         }
       }
 
-      // Validate default value if present
       if (schemaField.default !== undefined) {
         if (schemaField.default === null) {
           errors.push(`${key}: default value cannot be null`);
         } else {
           try {
-            // Validate default value against field type
             this.validateDefaultForType(key, schemaField.default, schemaField.type);
           } catch (error) {
             errors.push(`${key}: invalid default value - ${String(error)}`);
@@ -306,7 +292,6 @@ export class EnvParser {
         }
       }
 
-      // Validate environment-specific overrides
       if (schemaField.environments !== undefined) {
         if (typeof schemaField.environments !== 'object' || schemaField.environments === null) {
           errors.push(`${key}: environments must be an object`);
@@ -322,7 +307,6 @@ export class EnvParser {
         }
       }
 
-      // Validate type-specific properties
       this.validateTypeSpecificFields(key, schemaField, errors);
     }
 
@@ -359,7 +343,6 @@ export class EnvParser {
         break;
       case 'json':
         if (typeof defaultValue === 'string') {
-          // String defaults must be parseable as JSON
           try {
             JSON.parse(defaultValue);
           } catch {
@@ -415,14 +398,12 @@ export class EnvParser {
           if (field.values.length > 100) {
             errors.push(`${key}: enum values array exceeds maximum length of 100`);
           }
-          
-          // Check for duplicate values
+
           const uniqueValues = new Set(field.values);
           if (uniqueValues.size !== field.values.length) {
             errors.push(`${key}: enum values must be unique`);
           }
-          
-          // Validate each value
+
           for (let i = 0; i < field.values.length; i++) {
             const value = field.values[i];
             if (typeof value !== 'string') {
@@ -467,7 +448,6 @@ export class EnvParser {
       }
     }
 
-    // Check if files exist
     const existingFiles = filePaths.filter(fs.existsSync);
     if (existingFiles.length === 0) {
       throw new Error('No valid .env files found to merge');
@@ -490,7 +470,6 @@ export class EnvParser {
         const fileName = path.basename(filePath);
         
         for (const [key, value] of vars.entries()) {
-          // Check if this key already exists (override detection)
           if (merged.has(key)) {
             overriddenKeys.add(key);
           }
@@ -519,7 +498,6 @@ export class EnvParser {
         conflicts.push({ key, files: entries });
       }
     }
-
     if (options.failOnConflict && conflicts.length > 0) {
       const conflictDetails = conflicts.map(c => {
         const values = c.files.map(f => `${f.file}: ${f.value}`).join(', ');
@@ -561,7 +539,6 @@ export class EnvParser {
     const typeMismatches: { key: string; expected: string; actual: string }[] = [];
     const defaults: { key: string; default: string }[] = [];
 
-    // Find required vars missing from .env
     for (const [key, field] of Object.entries(schema)) {
       if (!envKeys.has(key)) {
         if (field.required) {
@@ -571,7 +548,6 @@ export class EnvParser {
           defaults.push({ key, default: String(field.default) });
         }
       } else {
-        // Check type match
         const actualType = this.inferType(envVars.get(key)!);
         if (actualType !== field.type && !(field.type === 'boolean' && actualType === 'number' && ['1', '0'].includes(envVars.get(key)!))) {
           typeMismatches.push({ key, expected: field.type, actual: actualType });
@@ -579,7 +555,6 @@ export class EnvParser {
       }
     }
 
-    // Find vars in .env not in schema
     for (const key of envKeys) {
       if (!schemaKeys.has(key)) {
         extra.push(key);
@@ -611,34 +586,28 @@ export class EnvParser {
     
     const environmentSchema = schema as EnvironmentSchema;
     const resolvedSchema: EnvSchema = {};
-    
-    // Apply base schema for the target environment
+
     const baseSchema = environmentSchema[environment] || {};
-    
-    // Apply environment-specific overrides
+
     for (const [key, field] of Object.entries(baseSchema)) {
       const resolvedField: SchemaField = { ...field };
-      
-      // Apply environment-specific overrides if they exist
+
       if (field.environments && field.environments[environment]) {
         const override = field.environments[environment];
         Object.assign(resolvedField, override);
-        
-        // Handle environment-specific defaults
+
         if (override.default !== undefined) {
           resolvedField.default = override.default;
         }
-        
-        // Handle environment-specific required flag
+
         if (override.required !== undefined) {
           resolvedField.required = override.required;
         }
       }
-      
+
       resolvedSchema[key] = resolvedField;
     }
-    
-    // Apply fallback if specified
+
     if (fallback && validEnvironments.includes(fallback)) {
       const fallbackSchema = environmentSchema[fallback];
       if (fallbackSchema) {
