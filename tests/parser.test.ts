@@ -243,4 +243,61 @@ describe('EnvParser', () => {
       assert.ok(result.errors.some(e => e.includes('must be an object')));
     });
   });
+
+  describe('isValidFilePath (via parseEnvFile)', () => {
+    it('should accept relative paths with .. (legitimate use case)', () => {
+      // This should NOT throw — relative paths are valid
+      assert.doesNotThrow(() => {
+        EnvParser.parseEnvFile('../nonexistent.env');
+      });
+    });
+
+    it('should accept paths outside cwd (e.g. /home/user/.env)', () => {
+      assert.doesNotThrow(() => {
+        EnvParser.parseEnvFile('/home/user/nonexistent.env');
+      });
+    });
+
+    it('should reject null bytes in file paths', () => {
+      assert.throws(() => {
+        EnvParser.parseEnvFile('evil\u0000file.env');
+      }, /Invalid file path/);
+    });
+
+    it('should reject script file extensions', () => {
+      assert.throws(() => {
+        EnvParser.parseEnvFile('test.sh');
+      }, /Invalid file path/);
+    });
+  });
+
+  describe('resolveEnvironmentSchema', () => {
+    it('should NOT misidentify flat schema with environment-named keys', () => {
+      // A flat EnvSchema with a variable named 'production' should not be
+      // treated as an EnvironmentSchema
+      const flatSchema = {
+        production: { type: 'boolean' as SchemaType, required: true, description: 'Enable production mode' },
+        DATABASE_URL: { type: 'string' as SchemaType, required: true }
+      };
+      
+      const result = EnvParser.resolveEnvironmentSchema(flatSchema, { environment: 'development' });
+      // Should return the flat schema as-is (legacy format)
+      assert.ok('production' in result);
+      assert.ok('DATABASE_URL' in result);
+    });
+
+    it('should correctly resolve a real EnvironmentSchema', () => {
+      const envSchema = {
+        development: {
+          LOG_LEVEL: { type: 'string' as SchemaType, required: true, default: 'debug' }
+        },
+        production: {
+          LOG_LEVEL: { type: 'string' as SchemaType, required: true, default: 'error' }
+        }
+      };
+      
+      const result = EnvParser.resolveEnvironmentSchema(envSchema, { environment: 'production' });
+      assert.ok('LOG_LEVEL' in result);
+    });
+  });
 });

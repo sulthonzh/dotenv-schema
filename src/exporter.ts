@@ -66,27 +66,26 @@ export class Exporter {
 
     for (const [key, field] of Object.entries(schema)) {
       const value = field.default !== undefined ? String(field.default) : '';
-      const indent = '  ';
       if (field.description) {
-        lines.push(`${indent}${indent}# ${field.description}`);
+        lines.push(`    # ${field.description}`);
       }
       
       // Use YAML block scalar for multiline values, quoted string for simple values
       if (value.includes('\n')) {
         // Multiline values - use block literal scalar (content on next line)
         const contentLines = value.split('\n');
-        lines.push(`${indent}${indent}${key}: |-`);
+        lines.push(`    ${key}: |-`);
         for (const contentLine of contentLines) {
-          lines.push(`${indent}${indent}${indent}${contentLine}`);
+          lines.push(`      ${contentLine}`);
         }
       } else if (value.includes(':') || value.includes('#') || value.includes('{') || value.includes('[') || value.includes('!') || value.includes('"') || value.includes("'") || value.includes('&') || value.includes('*') || value.includes('?') || value.includes('|') || value.includes('>') || value.includes('%') || value.includes('@') || value.includes('`') || value.includes(',')) {
         // Complex values - use double-quoted string with proper YAML escaping
         const escapedValue = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
-        lines.push(`${indent}${indent}${key}: "${escapedValue}"`);
+        lines.push(`    ${key}: "${escapedValue}"`);
       } else {
         // Simple values - use quoted string for safety
         const escapedValue = value.replace(/"/g, '\\"');
-        lines.push(`${indent}${indent}${key}: "${escapedValue}"`);
+        lines.push(`    ${key}: "${escapedValue}"`);
       }
     }
 

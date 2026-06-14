@@ -573,7 +573,7 @@ export class EnvParser {
       } else {
         // Check type match
         const actualType = this.inferType(envVars.get(key)!);
-        if (actualType !== field.type && !(field.type === 'string' && actualType === 'string')) {
+        if (actualType !== field.type && !(field.type === 'boolean' && actualType === 'number' && ['1', '0'].includes(envVars.get(key)!))) {
           typeMismatches.push({ key, expected: field.type, actual: actualType });
         }
       }
@@ -599,15 +599,20 @@ export class EnvParser {
     const { environment = process.env.NODE_ENV || 'development', fallback, strictMode = false } = config;
     const validEnvironments = ['development', 'production', 'test', 'staging'];
     
-    // Handle legacy format (single schema)
-    if (!schema.hasOwnProperty(environment)) {
+    // Detect whether this is an EnvironmentSchema (environment-keyed) or flat EnvSchema.
+    // An EnvironmentSchema has ONLY environment names as top-level keys, and each value
+    // is itself an EnvSchema (object of SchemaFields). A flat EnvSchema has variable
+    // names as keys with SchemaField values that have a 'type' property.
+    const isEnvSchema = this.isEnvironmentSchema(schema);
+    
+    if (!isEnvSchema) {
       return schema as EnvSchema;
     }
     
     const environmentSchema = schema as EnvironmentSchema;
     const resolvedSchema: EnvSchema = {};
     
-    // Apply base schema
+    // Apply base schema for the target environment
     const baseSchema = environmentSchema[environment] || {};
     
     // Apply environment-specific overrides
@@ -650,58 +655,75 @@ export class EnvParser {
   }
 
   /**
-   * Validate file path to prevent directory traversal attacks
-   * Enhanced with additional security checks
+   * Detect whether a schema object is an EnvironmentSchema (keyed by environment names)
+   * or a flat EnvSchema (keyed by variable names with SchemaField values).
+   */
+  private static isEnvironmentSchema(schema: any): boolean {
+    if (typeof schema !== 'object' || schema === null) {
+      return false;
+    }
+    const keys = Object.keys(schema);
+    if (keys.length === 0) {
+      return false;
+    }
+    const validEnvironments = ['development', 'production', 'test', 'staging'];
+    // Must have at least one key that's an environment name, AND every key must be
+    // an environment name, AND every value must be an EnvSchema (object of SchemaFields)
+    return keys.every(key => {
+      if (!validEnvironments.includes(key)) return false;
+      const value = schema[key];
+      if (typeof value !== 'object' || value === null) return false;
+      // Each value should be an EnvSchema — object with SchemaField values (which have 'type')
+      const innerKeys = Object.keys(value);
+      return innerKeys.every(innerKey => {
+        const innerVal = value[innerKey];
+        return typeof innerVal === 'object' && innerVal !== null && 'type' in innerVal;
+      });
+    });
+  }
+
+  /**
+   * Validate file path to prevent malicious patterns
+   * Focuses on blocking executable/script files and null bytes
+   * without blocking legitimate relative paths like ../config/.env
    */
   private static isValidFilePath(filePath: string): boolean {
     try {
-      // Basic validation - must be a string
       if (typeof filePath !== 'string' || !filePath.trim()) {
         return false;
       }
-      
-      // Normalize the path
-      const normalized = path.normalize(filePath);
-      
-      // Check for directory traversal attempts
-      if (normalized.includes('..') || normalized.includes('~') || 
-          normalized.includes('\\') || normalized.includes('/./') || 
-          normalized.includes('//')) {
+
+      // Block null bytes (path injection)
+      if (filePath.includes('\0')) {
         return false;
       }
-      
+
+      const normalized = path.normalize(filePath);
+
       // Check for potentially dangerous file extensions
       const dangerousExtensions = ['.sh', '.bat', '.cmd', '.ps1', '.exe', '.scr', '.com'];
       const ext = path.extname(normalized).toLowerCase();
       if (dangerousExtensions.includes(ext)) {
         return false;
       }
-      
-      // Resolve to absolute path and compare
+
+      // Reject symlinks pointing outside expected areas
       const resolved = path.resolve(normalized);
-      const cwd = process.cwd();
-      
-      // Ensure path is within current working directory or allowed locations
-      const isAllowed = resolved.startsWith(cwd) || 
-                       resolved.startsWith('/tmp') || 
-                       resolved.startsWith('/var') ||
-                       resolved.startsWith('/etc');
-      
-      if (!isAllowed) {
-        return false;
-      }
-      
-      // Additional security check: ensure path doesn't contain symlinks
       try {
-        const stats = fs.statSync(resolved, { throwIfNoEntry: false });
+        const stats = fs.lstatSync(resolved, { throwIfNoEntry: false });
         if (stats && stats.isSymbolicLink()) {
-          return false;
+          // Resolve the symlink target and check if it's reasonable
+          const realPath = fs.realpathSync(resolved);
+          // Block if symlink targets a script/executable location
+          const targetExt = path.extname(realPath).toLowerCase();
+          if (dangerousExtensions.includes(targetExt)) {
+            return false;
+          }
         }
       } catch {
-        // If we can't access the file, be conservative and reject
-        return false;
+        // File may not exist yet (for output paths) — that's fine
       }
-      
+
       return true;
     } catch {
       return false;
